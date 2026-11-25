@@ -10,7 +10,7 @@
 #define BLE_QUEUE_CAP 128
 #define ACK_QUEUE_CAP 256
 
-#define DEVICE_NAME  "ESP32_IMG_BRIDGE"
+#define DEVICE_NAME  "ESP32_IMG_BRIDGE_B" // Ganti jadi "ESP32_IMG_BRIDGE_B" untuk ESP32 #2B
 #define SERVICE_UUID "12345678-1234-5678-1234-56789abcdef0"
 #define TX_CHAR_UUID "12345678-1234-5678-1234-56789abcdef1"
 #define RX_CHAR_UUID "12345678-1234-5678-1234-56789abcdef2"
@@ -151,6 +151,8 @@ void setup() {
   pService->start();
   NimBLEAdvertising *pAdv = NimBLEDevice::getAdvertising();
   pAdv->addServiceUUID(SERVICE_UUID);
+  pAdv->setName(DEVICE_NAME);
+  pAdv->enableScanResponse(true);
   pAdv->start();
   Serial.println("ESP32 #2 NimBLE+I2C siap!");
 }

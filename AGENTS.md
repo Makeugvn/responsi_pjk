@@ -202,10 +202,10 @@ Pada jalur I2C, ESP32 #2 harus menyiapkan data balasan **sebelum** ESP32 #1 memb
 
 ## 7. Cara Tiap Tim Mengetes Bagiannya Sendiri (Sebelum Digabung)
 
-- **Sub-Tim UART:** Uji kirim [img.jpg](file:///home/maaku/responsi_pjk/img.jpg) dalam format `1 byte jumlah + paket 64 byte` (maks 64 paket per gelombang), dan pastikan timeout (`15.000 ms`) & retry bekerja saat sebagian ACK dihilangkan.
+- **Sub-Tim UART:** Uji kirim [samples/img.jpg](file:///home/maaku/responsi_pjk/samples/img.jpg) dalam format `1 byte jumlah + paket 64 byte` (maks 64 paket per gelombang), dan pastikan timeout (`15.000 ms`) & retry bekerja saat sebagian ACK dihilangkan.
 - **Sub-Tim I2C:** Uji ESP32 #1 menerima `1 + 4096 byte` via Serial (`setRxBufferSize(8192)`) ke `waveBuffer[4096]`, mengirim `1×64 byte` utuh ke ESP32 #2 dengan baca `4 byte` (`0x10`), serta kirim perintah `0x01` sebelum baca `64 byte` antrean ACK.
-- **Sub-Tim BLE:** Uji ESP32 #2 memancarkan maksimal 3 paket (`192 byte`) per kirim lewat BLE, menerima balik `ACK BLE (0x12)` sebelum lanjut ke pancaran berikutnya, serta menerima jejeran `ACK Akhir (0x02/0x03)` dan menaruhnya ke antrean I2C.
-- **Sub-Tim HTTP:** Uji program di **Laptop 2** (menerima data BLE, membalas `ACK BLE 0x12`, mengumpulkan 64 paket lalu mengirim `POST /batch` ke Laptop 3, dan membuat sinyal 4 byte `0x02`/`0x03` dari respon HTTP) serta program di **Laptop 3** (menerima `POST /batch` yang salah satu paketnya sengaja dirusak CRC-nya, memastikan paket yang benar tetap tersimpan, `failed` berisi nomor paket yang rusak saja, dan gambar tersusun utuh).
+- **Sub-Tim BLE:** Uji ESP32 #2 (`NimBLE-Arduino`) memancarkan hingga 8 paket (menyesuaikan MTU, maks `512 byte`) per kirim lewat BLE, menerima balik `ACK BLE (0x12)` sebelum lanjut ke pancaran berikutnya, serta menerima jejeran `ACK Akhir (0x02/0x03)` dan menaruhnya ke antrean I2C.
+- **Sub-Tim HTTP:** Uji program di **Laptop 2** (menerima data BLE, membalas `ACK BLE 0x12`, mengumpulkan 64 paket atau tunggu `40 ms`, mengirim `POST /batch` ke Laptop 3, dan membuat sinyal 4 byte `0x02`/`0x03` dari respon HTTP) serta program di **Laptop 3** (menerima `POST /batch` yang salah satu paketnya sengaja dirusak CRC-nya, memastikan paket yang benar tetap tersimpan, `failed` berisi nomor paket yang rusak saja, dan gambar tersusun utuh).
 
 ---
 
@@ -213,9 +213,9 @@ Pada jalur I2C, ESP32 #2 harus menyiapkan data balasan **sebelum** ESP32 #1 memb
 
 - **Kecepatan & Buffer Kabel USB (UART):** `500000` baud; ESP32 #1 wajib memanggil `Serial.setRxBufferSize(8192)` sebelum `Serial.begin(500000)`
 - **Ukuran Gelombang & Buffer RAM di ESP32 #1:** Maksimal **64 paket (`4096 byte`)** per gelombang (`uint8_t waveBuffer[4096]`)
-- **Batas Waktu (*Timeout*):** Timeout tunggu ACK Akhir di Laptop 1 **`15.000 ms`** per gelombang; batas tunggu gelombang tidak penuh di Laptop 2 **`150 ms`**
+- **Batas Waktu (*Timeout*):** Timeout tunggu ACK Akhir di Laptop 1 **`15.000 ms`** per gelombang; batas tunggu gelombang tidak penuh di Laptop 2 **`40 ms`**
 - **Alamat, Kecepatan, & Ukuran Transaksi I2C:** Alamat ESP32 #2 `0x42`, kecepatan `400000` Hz; kedua ESP32 wajib memanggil `Wire.setBufferSize(256)` sebelum `Wire.begin(...)`; kirim **`1×64 byte` utuh** per paket; beri jeda **`500 µs`** sebelum `Wire.requestFrom(...)`; kirim `0x02` lalu baca `4 byte` untuk cek `READY`; baca `4 byte` untuk ACK I2C; kirim `0x01` lalu baca `64 byte` (maks 16 sinyal) untuk antrean ACK Akhir
-- **Pengaturan BLE ESP32 #2 & Laptop 2:** Wajib memanggil `setMTU(517)` di awal; batas sekali pancaran BLE adalah **maksimal 3 paket (`192 byte`)** dan wajib menunggu `ACK BLE (0x12)` sebelum pancaran berikutnya; Laptop 2 menulis balik ACK dengan `response=False` berjeda **`15 ms`** antar potongan (`20 byte` jika MTU terbaca `23`), memakai `Lock`, serta *auto-reconnect*; bebas memilih library BLE, nama perangkat, serta UUID layanan (selama **Sub-Tim BLE** di ESP32 #2 dan **Sub-Tim HTTP** di Laptop 2 menyepakati nama & UUID yang sama)
+- **Pengaturan BLE ESP32 #2 & Laptop 2:** Menggunakan **`NimBLE-Arduino`** dengan `setMTU(517)` dan interval koneksi cepat (`7,5–15 ms`); jumlah paket per pancaran menyesuaikan MTU (maks `8 paket = 512 byte` pada MTU 517, atau `3 paket = 192 byte` pada MTU 247) dan menunggu `ACK BLE (0x12)` sebelum pancaran berikutnya; Laptop 2 menulis balik ACK dengan `response=False` berjeda **`5 ms`** antar potongan jika dipecah, memakai `Lock`, serta *auto-reconnect*; **Sub-Tim BLE** (`ESP32 #2`) dan **Sub-Tim HTTP** (`Laptop 2`) wajib memakai Service UUID (`12345678-1234-5678-1234-56789abcdef0`) dan nama perangkat (`ESP32_IMG_BRIDGE_A` / `_B`) yang sama
 - **Alamat Penerima Wi-Fi (HTTP):** `http://<IP_LAPTOP_3>:5000/batch`
 
 ---

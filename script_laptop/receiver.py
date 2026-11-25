@@ -22,7 +22,7 @@ FRAME_SIZE = 64
 PAYLOAD_SIZE = 60
 START_SEQ = 0xFFFF
 
-OUTPUT_DIR = Path(__file__).resolve().parent / "received_images"
+OUTPUT_DIR = Path(__file__).resolve().parent.parent / "received_images"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 transfer_lock = threading.Lock()

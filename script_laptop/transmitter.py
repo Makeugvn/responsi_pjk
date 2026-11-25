@@ -1,7 +1,10 @@
 import argparse
+from contextlib import ExitStack
 import math
 import os
+import queue
 import sys
+import threading
 import time
 import serial
 
@@ -52,7 +55,7 @@ def read_signal(ser: serial.Serial, deadline: float):
 
 
 def wait_ready(ser: serial.Serial, timeout: float = 60.0):
-    print("Menunggu READY (0x67) dari ESP32 #1...")
+    print(f"[{ser.port}] Menunggu READY (0x67)...")
     deadline = time.monotonic() + timeout
     win = bytearray()
     target = bytes([MSG_READY, 0x00, 0x00, 0x00])
@@ -64,21 +67,20 @@ def wait_ready(ser: serial.Serial, timeout: float = 60.0):
         if len(win) > 4:
             del win[0]
         if bytes(win) == target:
-            print("ESP32 READY!")
+            print(f"[{ser.port}] READY!")
             return
-    raise TimeoutError("Tidak menerima READY (0x67)")
+    raise TimeoutError(f"[{ser.port}] Tidak menerima READY (0x67)")
 
 
 def send_wave(ser: serial.Serial, frames: dict, sequences: list):
     pending = set(sequences)
     while pending:
         batch = sorted(pending)[:BATCH_SIZE]
-        # 1 byte header jumlah paket (1..64) + N x 64 byte paket
         outgoing = bytes([len(batch)]) + b"".join(frames[s] for s in batch)
         written = ser.write(outgoing)
         ser.flush()
         if written != len(outgoing):
-            raise IOError(f"UART write tidak lengkap: {written}/{len(outgoing)}")
+            raise IOError(f"[{ser.port}] UART write tidak lengkap: {written}/{len(outgoing)}")
 
         expected = set(batch)
         acknowledged = set()
@@ -93,17 +95,17 @@ def send_wave(ser: serial.Serial, frames: dict, sequences: list):
             if msg_type == MSG_ACK:
                 acknowledged.add(seq)
             elif msg_type == MSG_NACK:
-                print(f"[NACK] seq={seq} err={err}")
+                print(f"[{ser.port}] [NACK] seq={seq} err={err}")
 
         pending -= acknowledged
         if pending:
-            print(f"[RETRY] Mengirim ulang {len(pending)} paket: {sorted(pending)[:10]}...")
+            print(f"[{ser.port}] [RETRY] {len(pending)} paket: {sorted(pending)[:10]}...")
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("image")
-    parser.add_argument("--port", required=True)
+    parser.add_argument("--ports", "--port", nargs="+", required=True, dest="ports")
     parser.add_argument("--baud", type=int, default=500000)
     args = parser.parse_args()
 
@@ -124,24 +126,56 @@ def main():
     for seq in range(packet_count):
         frames[seq] = make_frame(seq, image[seq * PAYLOAD_SIZE:(seq + 1) * PAYLOAD_SIZE])
 
-    print(f"Kirim {args.image} ({len(image)} B, {packet_count} paket) via {args.port} @ {args.baud}")
-    with serial.Serial(args.port, args.baud, timeout=0.05, write_timeout=10) as ser:
-        ser.dtr = False
-        ser.rts = True
-        time.sleep(0.1)
-        ser.reset_input_buffer()
-        ser.rts = False
-        wait_ready(ser)
+    print(f"Kirim {args.image} ({len(image)} B, {packet_count} paket) via {args.ports} @ {args.baud}")
 
-        print("Mengirim Paket Pembuka (0xFFFF)...")
-        send_wave(ser, frames, [START_SEQ])
+    with ExitStack() as stack:
+        sers = []
+        for port in args.ports:
+            ser = stack.enter_context(serial.Serial(port, args.baud, timeout=0.05, write_timeout=10))
+            ser.dtr = False
+            ser.rts = True
+            time.sleep(0.1)
+            ser.reset_input_buffer()
+            ser.rts = False
+            sers.append(ser)
+
+        for ser in sers:
+            wait_ready(ser)
+
+        print(f"Mengirim Paket Pembuka (0xFFFF) via {sers[0].port}...")
+        send_wave(sers[0], frames, [START_SEQ])
+
+        wave_q = queue.Queue()
+        for first in range(0, packet_count, BATCH_SIZE):
+            wave_q.put(list(range(first, min(first + BATCH_SIZE, packet_count))))
+
+        lock = threading.Lock()
+        done_count = [0]
+        errors = []
+
+        def worker(ser):
+            try:
+                while True:
+                    try:
+                        seqs = wave_q.get_nowait()
+                    except queue.Empty:
+                        return
+                    send_wave(ser, frames, seqs)
+                    with lock:
+                        done_count[0] += len(seqs)
+                        print(f"[{ser.port}] Progress: {done_count[0]}/{packet_count} ({done_count[0] * 100 // packet_count}%)")
+            except Exception as e:
+                errors.append(e)
 
         start_time = time.monotonic()
-        for first in range(0, packet_count, BATCH_SIZE):
-            seqs = list(range(first, min(first + BATCH_SIZE, packet_count)))
-            send_wave(ser, frames, seqs)
-            done = min(first + BATCH_SIZE, packet_count)
-            print(f"Progress: {done}/{packet_count} ({done * 100 // packet_count}%)")
+        threads = [threading.Thread(target=worker, args=(ser,)) for ser in sers]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        if errors:
+            sys.exit(f"TRANSFER GAGAL: {errors[0]}")
 
         elapsed = time.monotonic() - start_time
         print(f"SELESAI dalam {elapsed:.2f}s ({len(image) / elapsed / 1024:.1f} KB/s)")
