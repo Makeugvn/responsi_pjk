@@ -202,7 +202,7 @@ Pada jalur I2C, ESP32 #2 harus menyiapkan data balasan **sebelum** ESP32 #1 memb
 
 ## 7. Cara Tiap Tim Mengetes Bagiannya Sendiri (Sebelum Digabung)
 
-- **Sub-Tim UART:** Uji kirim [img.jpg](file:///home/maaku/responsi_pjk/img.jpg) dalam format `1 byte jumlah + paket 64 byte` (maks 64 paket per gelombang), dan pastikan timeout (`15.000 ms`) & retry bekerja saat sebagian ACK dihilangkan.
+- **Sub-Tim UART:** Uji kirim [samples/img.jpg](file:///home/maaku/responsi_pjk/samples/img.jpg) dalam format `1 byte jumlah + paket 64 byte` (maks 64 paket per gelombang), dan pastikan timeout (`15.000 ms`) & retry bekerja saat sebagian ACK dihilangkan.
 - **Sub-Tim I2C:** Uji ESP32 #1 menerima `1 + 4096 byte` via Serial (`setRxBufferSize(8192)`) ke `waveBuffer[4096]`, mengirim `1×64 byte` utuh ke ESP32 #2 dengan baca `4 byte` (`0x10`), serta kirim perintah `0x01` sebelum baca `64 byte` antrean ACK.
 - **Sub-Tim BLE:** Uji ESP32 #2 memancarkan maksimal 3 paket (`192 byte`) per kirim lewat BLE, menerima balik `ACK BLE (0x12)` sebelum lanjut ke pancaran berikutnya, serta menerima jejeran `ACK Akhir (0x02/0x03)` dan menaruhnya ke antrean I2C.
 - **Sub-Tim HTTP:** Uji program di **Laptop 2** (menerima data BLE, membalas `ACK BLE 0x12`, mengumpulkan 64 paket lalu mengirim `POST /batch` ke Laptop 3, dan membuat sinyal 4 byte `0x02`/`0x03` dari respon HTTP) serta program di **Laptop 3** (menerima `POST /batch` yang salah satu paketnya sengaja dirusak CRC-nya, memastikan paket yang benar tetap tersimpan, `failed` berisi nomor paket yang rusak saja, dan gambar tersusun utuh).
