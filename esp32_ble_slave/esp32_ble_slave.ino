@@ -1,8 +1,5 @@
 #include <Wire.h>
-#include <BLEDevice.h>
-#include <BLEServer.h>
-#include <BLEUtils.h>
-#include <BLE2902.h>
+#include <NimBLEDevice.h>
 
 #define I2C_ADDR 0x42
 #define I2C_FREQ 400000
@@ -24,9 +21,10 @@ volatile int bleHead = 0, bleTail = 0, bleCount = 0;
 uint8_t ackQueue[ACK_QUEUE_CAP][4];
 volatile int ackHead = 0, ackTail = 0, ackCount = 0;
 
-BLECharacteristic *pTxChar = nullptr;
+NimBLECharacteristic *pTxChar = nullptr;
 volatile bool deviceConnected = false;
 volatile bool ackBleReceived = false;
+volatile uint16_t currentMtu = 23;
 portMUX_TYPE qMux = portMUX_INITIALIZER_UNLOCKED;
 
 uint8_t crc8_maxim(const uint8_t *data, size_t len) {
@@ -96,28 +94,36 @@ void onI2CReceive(int len) {
   while (Wire.available()) Wire.read();
 }
 
-class ServerCallbacks : public BLEServerCallbacks {
-  void onConnect(BLEServer *pServer) override {
+class ServerCallbacks : public NimBLEServerCallbacks {
+  void onConnect(NimBLEServer *pServer, NimBLEConnInfo &connInfo) override {
     deviceConnected = true;
-    Serial.println("BLE Laptop 2 terhubung!");
+    currentMtu = connInfo.getMTU();
+    // Minta interval koneksi tercepat 7.5-15ms
+    pServer->updateConnParams(connInfo.getConnHandle(), 6, 12, 0, 400);
+    Serial.printf("BLE Laptop 2 terhubung (MTU=%u)!\n", currentMtu);
   }
-  void onDisconnect(BLEServer *pServer) override {
+  void onMTUChange(uint16_t MTU, NimBLEConnInfo &connInfo) override {
+    currentMtu = MTU;
+    Serial.printf("MTU diperbarui: %u\n", currentMtu);
+  }
+  void onDisconnect(NimBLEServer *pServer, NimBLEConnInfo &connInfo, int reason) override {
     deviceConnected = false;
+    currentMtu = 23;
     Serial.println("BLE terputus, advertising lagi...");
-    pServer->startAdvertising();
+    NimBLEDevice::startAdvertising();
   }
 };
 
-class RxCallbacks : public BLECharacteristicCallbacks {
-  void onWrite(BLECharacteristic *pChar) override {
-    String val = pChar->getValue();
+class RxCallbacks : public NimBLECharacteristicCallbacks {
+  void onWrite(NimBLECharacteristic *pChar, NimBLEConnInfo &connInfo) override {
+    std::string val = pChar->getValue();
     size_t len = val.length();
     if (len >= 4 && (uint8_t)val[0] == 0x12) {
       ackBleReceived = true;
       return;
     }
     for (size_t i = 0; i + 4 <= len; i += 4) {
-      pushAck((const uint8_t *)val.c_str() + i);
+      pushAck((const uint8_t *)val.data() + i);
     }
   }
 };
@@ -128,25 +134,25 @@ void setup() {
   Wire.onReceive(onI2CReceive);
   Wire.begin((uint8_t)I2C_ADDR, SDA_PIN, SCL_PIN, I2C_FREQ);
 
-  BLEDevice::init(DEVICE_NAME);
-  BLEDevice::setMTU(517);
+  NimBLEDevice::init(DEVICE_NAME);
+  NimBLEDevice::setMTU(517);
 
-  BLEServer *pServer = BLEDevice::createServer();
+  NimBLEServer *pServer = NimBLEDevice::createServer();
   pServer->setCallbacks(new ServerCallbacks());
-  BLEService *pService = pServer->createService(SERVICE_UUID);
+  NimBLEService *pService = pServer->createService(SERVICE_UUID);
 
-  pTxChar = pService->createCharacteristic(TX_CHAR_UUID, BLECharacteristic::PROPERTY_NOTIFY);
-  pTxChar->addDescriptor(new BLE2902());
-
-  BLECharacteristic *pRxChar = pService->createCharacteristic(
+  pTxChar = pService->createCharacteristic(TX_CHAR_UUID, NIMBLE_PROPERTY::NOTIFY);
+  NimBLECharacteristic *pRxChar = pService->createCharacteristic(
     RX_CHAR_UUID,
-    BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_WRITE_NR
+    NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR
   );
   pRxChar->setCallbacks(new RxCallbacks());
 
   pService->start();
-  pServer->getAdvertising()->start();
-  Serial.println("ESP32 #2 BLE+I2C siap!");
+  NimBLEAdvertising *pAdv = NimBLEDevice::getAdvertising();
+  pAdv->addServiceUUID(SERVICE_UUID);
+  pAdv->start();
+  Serial.println("ESP32 #2 NimBLE+I2C siap!");
 }
 
 void loop() {
@@ -155,10 +161,13 @@ void loop() {
     return;
   }
 
+  int maxPkts = (currentMtu >= 67) ? ((currentMtu - 3) / PKT_SIZE) : 1;
+  if (maxPkts > 8) maxPkts = 8;
+
   int sendPkts = 0;
-  uint8_t txBuf[3 * PKT_SIZE];
+  uint8_t txBuf[8 * PKT_SIZE];
   portENTER_CRITICAL(&qMux);
-  while (sendPkts < 3 && bleCount > 0) {
+  while (sendPkts < maxPkts && bleCount > 0) {
     memcpy(&txBuf[sendPkts * PKT_SIZE], bleQueue[bleHead], PKT_SIZE);
     bleHead = (bleHead + 1) % BLE_QUEUE_CAP;
     bleCount--;
@@ -173,10 +182,12 @@ void loop() {
 
   ackBleReceived = false;
   pTxChar->setValue(txBuf, sendPkts * PKT_SIZE);
-  pTxChar->notify();
+  while (deviceConnected && !pTxChar->notify()) {
+    delay(2);
+  }
 
   unsigned long start = millis();
-  while (!ackBleReceived && deviceConnected && (millis() - start < 1000)) {
+  while (!ackBleReceived && deviceConnected && (millis() - start < 500)) {
     delay(1);
   }
 }

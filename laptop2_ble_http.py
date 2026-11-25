@@ -12,7 +12,7 @@ RX_CHAR_UUID = "12345678-1234-5678-1234-56789abcdef2"
 
 PKT_SIZE = 64
 BATCH_MAX = 64
-BATCH_WAIT_SEC = 0.15
+BATCH_WAIT_SEC = 0.04
 ACK_BLE = bytes([0x12, 0x00, 0x00, 0x00])
 
 
@@ -87,13 +87,13 @@ async def run_bridge(url: str):
                             is_fail = (status != 200 and (not failed or seq in failed))
                             acks.extend([0x03 if is_fail else 0x02, p[0], p[1], 0x02 if is_fail else 0x00])
 
-                        # Kirim jejeran ACK/NACK 4 byte balik ke ESP32 #2 dengan jeda 15ms per chunk agar Bluedroid tidak overflow
+                        # Kirim jejeran ACK/NACK 4 byte balik ke ESP32 #2 dengan jeda 5ms per chunk (NimBLE)
                         max_write = max(4, ((client.mtu_size - 3) // 4) * 4)
                         async with write_lock:
                             for i in range(0, len(acks), max_write):
                                 await client.write_gatt_char(RX_CHAR_UUID, bytes(acks[i:i + max_write]), response=False)
                                 if i + max_write < len(acks):
-                                    await asyncio.sleep(0.015)
+                                    await asyncio.sleep(0.005)
                         batch.clear()
                 print("BLE terputus, menyambung ulang...")
         except Exception as e:
