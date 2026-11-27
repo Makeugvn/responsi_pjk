@@ -24,6 +24,7 @@ responsi_pjk/
 │   ├── img.jpeg                   # ~136 KB
 │   └── image.jpeg                 # ~908 KB
 ├── received_images/               # Folder hasil gambar yang diterima Laptop 3
+├── requirements.txt               # Daftar library Python (pyserial, bleak, flask, opencv-python, numpy)
 ├── AGENTS.md                      # Panduan standar protokol tim
 └── README.md                      # Dokumentasi utama proyek
 ```
@@ -51,12 +52,12 @@ flowchart LR
 1. **Python (`.venv`):**
    ```bash
    python3 -m venv .venv
-   .venv/bin/pip install flask pyserial bleak opencv-python numpy
+   .venv/bin/pip install -r requirements.txt
    ```
 2. **ESP32 (Arduino IDE):**
    - Install library **`NimBLE-Arduino`** (v2.x oleh *h2zero*) lewat *Library Manager*.
    - Upload `script_esp32/esp32_i2c_master/esp32_i2c_master.ino` ke **ESP32 #1A** dan **ESP32 #1B**.
-   - Upload `script_esp32/esp32_ble_slave/esp32_ble_slave.ino` ke **ESP32 #2A** (`ESP32_IMG_BRIDGE_A`), lalu ubah `DEVICE_NAME` ke `"ESP32_IMG_BRIDGE_B"` untuk **ESP32 #2B**.
+   - Upload `script_esp32/esp32_ble_slave/esp32_ble_slave.ino` ke **ESP32 #2A** dan **ESP32 #2B** dengan `DEVICE_NAME` berbeda (`"ESP32_IMG_BRIDGE_A"` dan `"ESP32_IMG_BRIDGE_B"`).
    - Pasang I2C (`GPIO 21 ↔ 21`, `GPIO 22 ↔ 22`, `GND ↔ GND`, disarankan pull-up `2.2–4.7 kΩ` ke `3.3V`) antara `#1A ↔ #2A` dan `#1B ↔ #2B`.
 
 ### Menjalankan Program

@@ -39,7 +39,7 @@ Bertindak sebagai **I2C Slave (`0x42`)** sekaligus **BLE Server (`NimBLE-Arduino
 
 ### Pengaturan Nama Perangkat (Dual-Lane)
 - **ESP32 #2A:** `#define DEVICE_NAME "ESP32_IMG_BRIDGE_A"`
-- **ESP32 #2B:** ubah menjadi `#define DEVICE_NAME "ESP32_IMG_BRIDGE_B"` sebelum upload ke board kedua.
+- **ESP32 #2B:** `#define DEVICE_NAME "ESP32_IMG_BRIDGE_B"` (sesuaikan nilai `DEVICE_NAME` di `.ino` sebelum upload ke masing-masing board).
 - `SERVICE_UUID`, `TX_CHAR_UUID`, dan `RX_CHAR_UUID` tetap sama di kedua board.
 
 ### Rincian Alur Kerja

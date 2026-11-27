@@ -68,9 +68,9 @@ Server Flask di port `5000` yang menerima batch paket 64 byte, memvalidasi `CRC-
   - Memvalidasi panjang payload paket data dan menyimpannya ke `transfer["packets"][sequence]` (aman untuk duplikat/retry maupun kedatangan *out-of-order* dari 2 jalur).
   - Saat `len(packets) == packet_count`, seluruh payload disatukan berurutan `0..packet_count-1` dan ditulis ke `received_images/<filename>`.
 - **`POST /batch`:** Memproses seluruh paket dalam 1 batch. Paket yang valid tetap disimpan; nomor urut yang gagal dikumpulkan di list `failed` dan dikembalikan dengan status `400` (`{"status": "batch_error", "failed": [...]}`).
-- **Live Preview (`/` web & jendela OpenCV):**
+- **Live Preview (Jendela OpenCV):**
   - `update_live_preview()` mendekode potongan JPEG yang sudah masuk (`cv2.imdecode`) dan menutup bagian bawah yang belum tiba sesuai persentase paket, dibatasi maksimal 1× setiap `0.5` detik agar tidak memperlambat HTTP.
-  - Dapat dipantau lewat jendela popup OpenCV **`Live Receiver Preview`** maupun browser di `http://localhost:5000` (`/status` & `/preview`).
+  - Jendela OpenCV **`Live Receiver Preview`** langsung terbuka saat program dijalankan (`"Menunggu pengiriman gambar..."`), dan status JSON tetap tersedia di `GET /status` (Web UI `/` & `/preview` sudah dihapus agar lebih sederhana).
 
 ### Cara Menjalankan
 ```bash

@@ -2,7 +2,7 @@ import sys
 if "/usr/lib/python3/dist-packages" not in sys.path:
     sys.path.append("/usr/lib/python3/dist-packages")
 
-from flask import Flask, request, jsonify, Response
+from flask import Flask, request, jsonify
 from pathlib import Path
 import threading
 import math
@@ -187,45 +187,6 @@ def process_frame(frame: bytes, update_preview_now: bool = True):
     return 200, {"status": "ok", "sequence": sequence, "received": received_count, "total": transfer["packet_count"]}
 
 
-@app.route("/", methods=["GET"])
-def index():
-    html = """<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Live Image Receiver</title>
-<style>
-  body { font-family: sans-serif; background: #18181b; color: #f4f4f5; text-align: center; padding: 20px; }
-  .box { max-width: 720px; margin: 0 auto; background: #27272a; padding: 20px; border-radius: 12px; }
-  .bar-bg { width: 100%; background: #3f3f46; height: 22px; border-radius: 11px; overflow: hidden; margin: 12px 0; }
-  .bar-fill { height: 100%; background: #22c55e; width: 0%; transition: width 0.15s; }
-  img { max-width: 100%; max-height: 75vh; border-radius: 8px; margin-top: 12px; border: 2px solid #52525b; }
-</style></head><body>
-<div class="box">
-  <h2>Live Image Receiver</h2>
-  <div id="info">Menunggu pengiriman gambar...</div>
-  <div class="bar-bg"><div class="bar-fill" id="bar"></div></div>
-  <img id="preview" src="" style="display:none;" />
-</div>
-<script>
-  async function poll() {
-    try {
-      const st = await (await fetch('/status')).json();
-      if (st.total > 0) {
-        const pct = Math.floor((st.received * 100) / st.total);
-        document.getElementById('bar').style.width = pct + '%';
-        document.getElementById('info').innerText = st.filename + ' — ' + st.received + '/' + st.total + ' paket (' + pct + '%)';
-        if (st.received > 0) {
-          const img = document.getElementById('preview');
-          img.style.display = 'inline-block';
-          img.src = '/preview?t=' + st.updated_at;
-        }
-      }
-    } catch (e) {}
-    setTimeout(poll, 200);
-  }
-  poll();
-</script></body></html>"""
-    return Response(html, mimetype="text/html")
-
-
 @app.route("/status", methods=["GET"])
 def status():
     with transfer_lock:
@@ -237,15 +198,6 @@ def status():
             "total": transfer["packet_count"],
             "updated_at": transfer["updated_at"],
         })
-
-
-@app.route("/preview", methods=["GET"])
-def preview():
-    with transfer_lock:
-        data = transfer["preview_jpeg"]
-    if not data:
-        return Response(status=204)
-    return Response(data, mimetype="image/jpeg")
 
 
 @app.route("/batch", methods=["POST"])
@@ -276,7 +228,22 @@ def receive_batch():
 
 def gui_loop():
     last_shown = 0
-    window_opened = False
+    win = "Live Receiver Preview"
+    cv2.namedWindow(win, cv2.WINDOW_NORMAL)
+
+    placeholder = np.full((320, 520, 3), 24, dtype=np.uint8)
+    cv2.putText(
+        placeholder,
+        "Menunggu pengiriman gambar...",
+        (45, 165),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.75,
+        (200, 200, 200),
+        2,
+    )
+    cv2.imshow(win, placeholder)
+    cv2.waitKey(1)
+
     while True:
         with transfer_lock:
             jpeg_data = transfer["preview_jpeg"]
@@ -305,27 +272,26 @@ def gui_loop():
                     (0, 255, 128) if complete else (0, 220, 255),
                     2,
                 )
-                cv2.imshow("Live Receiver Preview", img)
-                window_opened = True
+                cv2.imshow(win, img)
                 last_shown = updated_at
 
-        if window_opened:
-            cv2.waitKey(30)
-        else:
-            time.sleep(0.05)
+        cv2.waitKey(30)
 
 
 if __name__ == "__main__":
-    print("HTTP RECEIVER (64B) STARTED -> http://localhost:5000")
+    print("HTTP RECEIVER (64B) STARTED -> http://0.0.0.0:5000/batch")
     if HAS_CV2:
+        print("[GUI] Jendela preview OpenCV aktif.")
         threading.Thread(
             target=lambda: app.run(host="0.0.0.0", port=5000, debug=False, threaded=True, use_reloader=False),
             daemon=True,
         ).start()
         try:
             gui_loop()
-        except Exception:
+        except Exception as e:
+            print(f"[GUI ERROR] {e}")
             while True:
                 time.sleep(1)
     else:
+        print("[GUI] OpenCV (cv2) belum terpasang. Untuk jendela preview, jalankan: pip install opencv-python")
         app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)

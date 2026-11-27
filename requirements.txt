@@ -1,0 +1,10 @@
+# Laptop 1 (UART Transmitter)
+pyserial
+
+# Laptop 2 (BLE -> HTTP Bridge)
+bleak
+
+# Laptop 3 (HTTP Receiver & Live Preview)
+flask
+opencv-python
+numpy
