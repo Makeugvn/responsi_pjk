@@ -8,10 +8,10 @@ import threading
 import time
 import serial
 
-FRAME_SIZE = 64
-PAYLOAD_SIZE = 60
+FRAME_SIZE = 244
+PAYLOAD_SIZE = 240
 START_SEQ = 0xFFFF
-BATCH_SIZE = 64
+BATCH_SIZE = 32
 ACK_TIMEOUT = 15.0
 
 MSG_ACK = 0x02
@@ -39,7 +39,7 @@ def make_frame(sequence: int, payload: bytes) -> bytes:
     frame[0:2] = sequence.to_bytes(2, "little")
     frame[2] = len(payload)
     frame[3:3 + len(payload)] = payload
-    frame[63] = crc8_maxim(frame[:63])
+    frame[FRAME_SIZE - 1] = crc8_maxim(frame[:FRAME_SIZE - 1])
     return bytes(frame)
 
 

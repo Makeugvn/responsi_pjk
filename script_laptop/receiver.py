@@ -18,8 +18,8 @@ except Exception:
 
 app = Flask(__name__)
 
-FRAME_SIZE = 64
-PAYLOAD_SIZE = 60
+FRAME_SIZE = 244
+PAYLOAD_SIZE = 240
 START_SEQ = 0xFFFF
 
 OUTPUT_DIR = Path(__file__).resolve().parent.parent / "received_images"
@@ -112,7 +112,7 @@ def process_frame(frame: bytes, update_preview_now: bool = True):
     sequence = int.from_bytes(frame[0:2], "little")
     length = frame[2]
 
-    if frame[63] != crc8_maxim(frame[:63]):
+    if frame[FRAME_SIZE - 1] != crc8_maxim(frame[:FRAME_SIZE - 1]):
         print(f"[CRC ERROR] SEQ={sequence}")
         return 400, {"error": "CRC mismatch", "sequence": sequence}
 

@@ -6,9 +6,9 @@
 #define SDA_PIN 21
 #define SCL_PIN 22
 
-#define PKT_SIZE 64
-#define MAX_WAVE_PKTS 64
-#define WAVE_BUF_SIZE (MAX_WAVE_PKTS * PKT_SIZE)
+#define PKT_SIZE 244
+#define MAX_WAVE_PKTS 32
+#define WAVE_BUF_SIZE (MAX_WAVE_PKTS * PKT_SIZE) // 7808 byte
 
 #define CMD_POLL_ACK 0x01
 #define CMD_CHECK_READY 0x02
@@ -38,11 +38,11 @@ bool pollAcksAndForward() {
 }
 
 void setup() {
-  Serial.setRxBufferSize(8192);
+  Serial.setRxBufferSize(16384);
   Serial.begin(BAUD_RATE);
   Serial.setTimeout(2000);
 
-  Wire.setBufferSize(256);
+  Wire.setBufferSize(512);
   Wire.begin(SDA_PIN, SCL_PIN, I2C_FREQ);
 
   // Tanya status READY (0x67) ke ESP32 #2 sampai BLE terhubung

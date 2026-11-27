@@ -6,8 +6,8 @@
 #define SDA_PIN 21
 #define SCL_PIN 22
 
-#define PKT_SIZE 64
-#define BLE_QUEUE_CAP 128
+#define PKT_SIZE 244
+#define BLE_QUEUE_CAP 64
 #define ACK_QUEUE_CAP 256
 
 #define DEVICE_NAME  "ESP32_IMG_BRIDGE_B" // Ganti jadi "ESP32_IMG_BRIDGE_B" untuk ESP32 #2B
@@ -65,7 +65,8 @@ void onI2CReceive(int len) {
       portEXIT_CRITICAL_ISR(&qMux);
       Wire.slaveWrite(resp, 64);
     } else if (cmd == 0x02) {
-      uint8_t readyResp[4] = {(uint8_t)(deviceConnected ? 0x67 : 0x00), 0x00, 0x00, 0x00};
+      bool ready = deviceConnected && (currentMtu >= PKT_SIZE + 3);
+      uint8_t readyResp[4] = {(uint8_t)(ready ? 0x67 : 0x00), 0x00, 0x00, 0x00};
       Wire.slaveWrite(readyResp, 4);
     }
     return;
@@ -76,7 +77,7 @@ void onI2CReceive(int len) {
     for (int i = 0; i < PKT_SIZE; i++) pkt[i] = Wire.read();
 
     uint8_t ack[4] = {0x11, pkt[0], pkt[1], 0x01};
-    if (crc8_maxim(pkt, 63) == pkt[63]) {
+    if (crc8_maxim(pkt, PKT_SIZE - 1) == pkt[PKT_SIZE - 1]) {
       portENTER_CRITICAL_ISR(&qMux);
       if (bleCount < BLE_QUEUE_CAP) {
         memcpy(bleQueue[bleTail], pkt, PKT_SIZE);
@@ -130,7 +131,7 @@ class RxCallbacks : public NimBLECharacteristicCallbacks {
 
 void setup() {
   Serial.begin(115200);
-  Wire.setBufferSize(256);
+  Wire.setBufferSize(512);
   Wire.onReceive(onI2CReceive);
   Wire.begin((uint8_t)I2C_ADDR, SDA_PIN, SCL_PIN, I2C_FREQ);
 
@@ -163,11 +164,11 @@ void loop() {
     return;
   }
 
-  int maxPkts = (currentMtu >= 67) ? ((currentMtu - 3) / PKT_SIZE) : 1;
-  if (maxPkts > 8) maxPkts = 8;
+  int maxPkts = (currentMtu >= PKT_SIZE + 3) ? ((currentMtu - 3) / PKT_SIZE) : 1;
+  if (maxPkts > 2) maxPkts = 2;
 
   int sendPkts = 0;
-  uint8_t txBuf[8 * PKT_SIZE];
+  uint8_t txBuf[2 * PKT_SIZE];
   portENTER_CRITICAL(&qMux);
   while (sendPkts < maxPkts && bleCount > 0) {
     memcpy(&txBuf[sendPkts * PKT_SIZE], bleQueue[bleHead], PKT_SIZE);
