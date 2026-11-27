@@ -11,12 +11,12 @@ Standar protokol lengkap tersedia di [AGENTS.md](AGENTS.md).
 ```text
 responsi_pjk/
 ├── script_laptop/                 # Program Python untuk Laptop 1, Laptop 2, dan Laptop 3
-│   ├── transmitter.py             # Laptop 1: potong gambar 64B, kirim UART (1 atau 2 port)
+│   ├── transmitter.py             # Laptop 1: potong gambar 244B, kirim UART (1 atau 2 port)
 │   ├── laptop2_ble_http.py        # Laptop 2: jembatan BLE (NimBLE) -> HTTP POST /batch
 │   ├── receiver.py                # Laptop 3: server HTTP, validasi CRC-8, susun gambar + preview
 │   └── README.md                  # Dokumentasi rinci tiap script Python
 ├── script_esp32/                  # Sketch Arduino untuk ESP32 #1 dan ESP32 #2
-│   ├── esp32_i2c_master/          # ESP32 #1A & #1B: UART RX -> I2C Master 1x64B
+│   ├── esp32_i2c_master/          # ESP32 #1A & #1B: UART RX -> I2C Master 1x244B
 │   ├── esp32_ble_slave/           # ESP32 #2A & #2B: I2C Slave -> NimBLE-Arduino
 │   └── README.md                  # Dokumentasi rinci tiap sketch ESP32
 ├── samples/                       # Gambar sampel untuk pengujian
